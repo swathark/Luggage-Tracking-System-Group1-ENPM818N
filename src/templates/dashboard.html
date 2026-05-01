@@ -1,0 +1,229 @@
+{% extends 'base.html' %}
+{% block title %}Agent Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Agent Dashboard</h1>
+        <nav style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">
+            <a href="/" style="color: var(--text-secondary); text-decoration: none;">Home</a>
+            <span style="margin: 0 8px;">/</span>
+            <span>Dashboard</span>
+        </nav>
+    </div>
+    <div style="font-size: 13px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; background: var(--bg-sidebar); padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border);">
+        <span style="width: 8px; height: 8px; background: var(--success); border-radius: 50%; display: inline-block;"></span>
+        Live Data Connected
+    </div>
+</div>
+
+<div class="page-body fade-in">
+    <!-- KPI Cards -->
+    <div class="kpi-grid">
+        <div class="kpi-card fade-in">
+            <div class="kpi-label"><i data-lucide="briefcase"></i> Total Bags Tracked</div>
+            <div class="kpi-value">{{ total_bags }}</div>
+        </div>
+        <div class="kpi-card fade-in">
+            <div class="kpi-label"><i data-lucide="ticket"></i> Active Tickets</div>
+            <div class="kpi-value" style="color: var(--danger);">{{ open_tickets }}</div>
+        </div>
+        <div class="kpi-card fade-in">
+            <div class="kpi-label"><i data-lucide="check-circle"></i> Delivered</div>
+            <div class="kpi-value" style="color: var(--success);">{{ delivered }}</div>
+        </div>
+        <div class="kpi-card fade-in">
+            <div class="kpi-label"><i data-lucide="activity"></i> SLA Compliance</div>
+            <div class="kpi-value" style="color: var(--accent);">{{ sla_rate }}%</div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 24px;">
+        <!-- Luggage Status Distribution -->
+        <div class="gll-card fade-in">
+            <div class="gll-card-header">
+                <div><i data-lucide="package" style="width: 16px; height: 16px; margin-right: 6px; vertical-align: text-bottom;"></i> Luggage Status</div>
+            </div>
+            <div class="gll-card-body">
+                {% set colors = {'Checked In': '#8E8E93', 'Loaded': '#5AC8FA', 'In Transit': '#FF9500', 'Arrived': '#007AFF', 'Delivered': '#34C759'} %}
+                {% for row in status_dist %}
+                <div style="margin-bottom: 16px;">
+                    <div class="flex-between" style="margin-bottom: 6px;">
+                        <span style="font-size: 13px; font-weight: 500; color: {{ colors.get(row['status'], '#8E8E93') }};">{{ row['status'] }}</span>
+                        <span style="font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono', monospace;">{{ row['cnt'] }}</span>
+                    </div>
+                    <div style="background: var(--bg-sidebar-hover); border-radius: 4px; overflow: hidden; height: 6px;">
+                        <div style="width: {{ (row['cnt'] / total_bags * 100) if total_bags > 0 else 0 }}%; background: {{ colors.get(row['status'], '#8E8E93') }}; height: 100%; border-radius: 4px;"></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Ticket Status Pie Chart -->
+        <div class="gll-card fade-in">
+            <div class="gll-card-header">
+                <div><i data-lucide="pie-chart" style="width: 16px; height: 16px; margin-right: 6px; vertical-align: text-bottom;"></i> Ticket Status</div>
+            </div>
+            <div class="gll-card-body" style="display: flex; align-items: center; justify-content: center; height: 260px;">
+                <canvas id="ticketStatusChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Priority Distribution -->
+        <div class="gll-card fade-in">
+            <div class="gll-card-header">
+                <div><i data-lucide="alert-circle" style="width: 16px; height: 16px; margin-right: 6px; vertical-align: text-bottom;"></i> Priority Breakdown</div>
+            </div>
+            <div class="gll-card-body" style="display: flex; align-items: center; justify-content: center; height: 260px;">
+                <canvas id="priorityChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Row -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+        <!-- Team Distribution -->
+        <div class="gll-card fade-in">
+            <div class="gll-card-header">
+                <div><i data-lucide="users" style="width: 16px; height: 16px; margin-right: 6px; vertical-align: text-bottom;"></i> Tickets by Team</div>
+            </div>
+            <div class="gll-card-body">
+                {% if team_dist %}
+                {% for row in team_dist %}
+                <div style="margin-bottom: 16px;">
+                    <div class="flex-between" style="margin-bottom: 6px;">
+                        <span style="font-size: 13px; font-weight: 500; color: var(--text-primary);">{{ row['assigned_team'] }}</span>
+                        <span style="font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono', monospace;">{{ row['cnt'] }}</span>
+                    </div>
+                    <div style="background: var(--bg-sidebar-hover); border-radius: 4px; overflow: hidden; height: 6px;">
+                        {% set max_team = team_dist[0]['cnt'] if team_dist else 1 %}
+                        <div style="width: {{ (row['cnt'] / max_team * 100) }}%; background: var(--accent); height: 100%; border-radius: 4px;"></div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div style="text-align: center; padding: 24px; color: var(--text-secondary);">No team assignments active.</div>
+                {% endif %}
+
+                <!-- SLA Alert -->
+                {% if sla_breached > 0 %}
+                <div style="margin-top: 24px; padding: 16px; background: var(--danger-bg); border: 1px solid var(--danger); border-radius: var(--radius-sm);">
+                    <div style="font-size: 14px; font-weight: 600; color: var(--danger); display: flex; align-items: center; gap: 8px;">
+                        <i data-lucide="alert-triangle" style="width: 18px; height: 18px;"></i>
+                        {{ sla_breached }} ticket{{ 's' if sla_breached != 1 else '' }} breaching SLA
+                    </div>
+                    <a href="/tickets?status=New" style="font-size: 13px; color: var(--danger); margin-top: 8px; display: inline-flex; align-items: center; gap: 4px; font-weight: 500;">
+                        View critical tickets <i data-lucide="arrow-right" style="width: 14px; height: 14px;"></i>
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Recent Tickets -->
+        <div class="gll-card fade-in">
+            <div class="gll-card-header">
+                <div><i data-lucide="clock" style="width: 16px; height: 16px; margin-right: 6px; vertical-align: text-bottom;"></i> Recent Tickets</div>
+                <a href="/tickets" style="font-size: 13px; color: var(--accent); text-decoration: none; font-weight: 500;">View All</a>
+            </div>
+            <div class="gll-card-body" style="padding: 0;">
+                {% if recent_tickets %}
+                    {% for ticket in recent_tickets %}
+                    <a href="/ticket/{{ ticket['id'] }}" style="display: block; padding: 16px 20px; border-bottom: 1px solid var(--border-light); text-decoration: none; color: inherit; transition: background 0.2s;">
+                        <div style="display: flex; align-items: flex-start; justify-content: space-between;">
+                            <div style="flex: 1; min-width: 0; padding-right: 16px;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                    <span style="font-size: 12px; font-weight: 600; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace;">#{{ ticket['id'] }}</span>
+                                    <span class="priority-badge priority-{{ ticket['priority']|lower|replace(' ', '') }}">{{ ticket['priority'] }}</span>
+                                    <span style="font-size: 12px; font-family: 'JetBrains Mono', monospace; font-weight: 500; color: var(--accent);">{{ ticket['bag_tag'] }}</span>
+                                </div>
+                                <div style="font-size: 14px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500;">
+                                    {{ ticket['issue_description'] }}
+                                </div>
+                            </div>
+                            <span class="status-badge status-{{ ticket['ticket_status']|lower|replace(' ', '') }}">
+                                {{ ticket['ticket_status'] }}
+                            </span>
+                        </div>
+                    </a>
+                    {% endfor %}
+                {% else %}
+                    <div style="text-align: center; padding: 32px; color: var(--text-secondary);">
+                        No tickets yet.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+<script>
+    // Corporate color pallete for charts
+    const corporateColors = ['#007AFF', '#34C759', '#FF9500', '#FF3B30', '#8E8E93'];
+
+    // Ticket Status Doughnut
+    const statusCtx = document.getElementById('ticketStatusChart');
+    if (statusCtx) {
+        new Chart(statusCtx, {
+            type: 'doughnut',
+            data: {
+                labels: {{ VALID_STATUSES|tojson }},
+                datasets: [{
+                    data: [
+                        {% for s in VALID_STATUSES %}{{ ticket_status_counts.get(s, 0) }}{% if not loop.last %}, {% endif %}{% endfor %}
+                    ],
+                    backgroundColor: corporateColors,
+                    borderWidth: 0,
+                    hoverOffset: 4,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '60%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { boxWidth: 10, padding: 12, font: { size: 12, family: 'Inter', weight: '500' }, color: '#1C1C1E' }
+                    }
+                }
+            }
+        });
+    }
+
+    // Priority Pie
+    const priCtx = document.getElementById('priorityChart');
+    if (priCtx) {
+        new Chart(priCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['P1 Critical', 'P2 High', 'P3 Medium', 'P4 Low'],
+                datasets: [{
+                    data: [
+                        {% for p in VALID_PRIORITIES %}{{ priority_counts.get(p, 0) }}{% if not loop.last %}, {% endif %}{% endfor %}
+                    ],
+                    backgroundColor: ['#FF3B30', '#FF9500', '#FFCC00', '#5AC8FA'],
+                    borderWidth: 0,
+                    hoverOffset: 4,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '60%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { boxWidth: 10, padding: 12, font: { size: 12, family: 'Inter', weight: '500' }, color: '#1C1C1E' }
+                    }
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}

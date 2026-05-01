@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Luggage Tracking{% endblock %} — GLL Operations</title>
+    <meta name="description" content="Global Luggage Logistics Customer Service Portal">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <a href="/">
+                <div class="brand-icon">
+                    <i data-lucide="plane"></i>
+                </div>
+                <div>Global Luggage</div>
+            </a>
+        </div>
+        <nav class="sidebar-nav">
+            <div class="nav-section-label">Main</div>
+            <a href="/" class="sidebar-link {% if request.endpoint == 'gateway.landing' %}active{% endif %}">
+                <i data-lucide="home"></i> Home
+            </a>
+            <a href="/dashboard" class="sidebar-link {% if request.endpoint == 'analytics.dashboard' %}active{% endif %}">
+                <i data-lucide="layout-dashboard"></i> Dashboard
+            </a>
+
+            <div class="nav-section-label">Operations</div>
+            <a href="/bag/new" class="sidebar-link {% if request.endpoint == 'luggage.new_bag' %}active{% endif %}">
+                <i data-lucide="plus-square"></i> Register Luggage
+            </a>
+            <a href="/search" class="sidebar-link {% if request.endpoint in ('luggage.search', 'luggage.results') %}active{% endif %}">
+                <i data-lucide="search"></i> Search Luggage
+            </a>
+            <a href="/tickets" class="sidebar-link {% if request.endpoint in ('tickets.tickets', 'tickets.ticket_detail') %}active{% endif %}">
+                <i data-lucide="ticket"></i> Ticket Center
+                {% if open_ticket_count is defined and open_ticket_count > 0 %}
+                <span class="nav-badge">{{ open_ticket_count }}</span>
+                {% endif %}
+            </a>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Toast Notifications -->
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            <div style="position:fixed; top:20px; right:20px; z-index:9999;">
+              {% for message in messages %}
+                <div class="gll-toast" onclick="this.remove()" style="animation: slideIn 0.3s ease;">
+                    {{ message }}
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Confirm Modal (reusable) -->
+    <div id="confirmModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:2000; align-items:center; justify-content:center;">
+        <div class="gll-card" style="padding:24px; max-width:400px; width:90%;">
+            <h3 class="modal-title" style="margin-bottom:8px; font-weight:600;">Confirm Action</h3>
+            <p class="modal-message" style="color:var(--text-secondary); margin-bottom:24px; font-size:14px;">Are you sure?</p>
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+                <button class="btn btn-outline" onclick="document.getElementById('confirmModal').style.display='none'">Cancel</button>
+                <button class="btn btn-primary modal-confirm-btn" style="background:var(--danger); border-color:var(--danger);">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Auto-dismiss toasts after 5s
+        document.querySelectorAll('.gll-toast').forEach(t => {
+            setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 5000);
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                const searchInput = document.querySelector('input[name="query"]');
+                if (searchInput) searchInput.focus();
+            }
+            if (e.key === 'Escape') {
+                document.getElementById('confirmModal').style.display = 'none';
+            }
+        });
+
+        // Confirm dialog helper
+        function showConfirm(title, message, formId) {
+            const overlay = document.getElementById('confirmModal');
+            if (!overlay) return;
+            overlay.querySelector('.modal-title').textContent = title;
+            overlay.querySelector('.modal-message').textContent = message;
+            overlay.querySelector('.modal-confirm-btn').onclick = () => {
+                document.getElementById(formId).submit();
+                overlay.style.display = 'none';
+            };
+            overlay.style.display = 'flex';
+        }
+
+        // ==========================================
+        // Universal Table Sort
+        // ==========================================
+        const _sortState = {};
+
+        function sortTable(tableId, colIndex) {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            if (rows.length === 0) return;
+
+            // Toggle direction
+            const key = tableId + '_' + colIndex;
+            _sortState[key] = _sortState[key] === 'asc' ? 'desc' : 'asc';
+            const dir = _sortState[key];
+
+            // Priority ranking map
+            const priorityRank = { 'P1': 1, 'P2': 2, 'P3': 3, 'P4': 4 };
+
+            // Parse relative time strings ("18h ago", "5m ago", "3d ago", "2mo ago", "just now") to seconds
+            function parseTimeAgo(str) {
+                if (!str) return Infinity;
+                str = str.trim().toLowerCase();
+                if (str === 'just now' || str === 'n/a') return 0;
+                const match = str.match(/^(\d+)\s*(s|m|h|d|mo)\s*ago$/);
+                if (!match) return Infinity;
+                const val = parseInt(match[1], 10);
+                const unit = match[2];
+                const multipliers = { 's': 1, 'm': 60, 'h': 3600, 'd': 86400, 'mo': 2592000 };
+                return val * (multipliers[unit] || 1);
+            }
+
+            // Extract sortable value from a cell
+            function getCellValue(row, idx) {
+                const cell = row.querySelectorAll('td')[idx];
+                if (!cell) return '';
+                // Get visible text content, stripping badge wrappers
+                return cell.textContent.trim();
+            }
+
+            // Determine sort type from first non-empty value
+            const sample = getCellValue(rows[0], colIndex);
+            let sortType = 'text';
+            if (/^#?\d+$/.test(sample.replace('#', ''))) sortType = 'numeric';
+            else if (/^P[1-4]$/.test(sample)) sortType = 'priority';
+            else if (/\d+[smhd]|mo\s*ago|just now/i.test(sample)) sortType = 'timeago';
+
+            rows.sort((a, b) => {
+                let valA = getCellValue(a, colIndex);
+                let valB = getCellValue(b, colIndex);
+                let cmp = 0;
+
+                switch (sortType) {
+                    case 'numeric':
+                        cmp = parseInt(valA.replace('#', ''), 10) - parseInt(valB.replace('#', ''), 10);
+                        break;
+                    case 'priority':
+                        cmp = (priorityRank[valA] || 99) - (priorityRank[valB] || 99);
+                        break;
+                    case 'timeago':
+                        // Smaller seconds = more recent = sort first in asc
+                        cmp = parseTimeAgo(valA) - parseTimeAgo(valB);
+                        break;
+                    default:
+                        cmp = valA.localeCompare(valB, undefined, { sensitivity: 'base' });
+                }
+
+                return dir === 'asc' ? cmp : -cmp;
+            });
+
+            // Re-attach rows in new order
+            rows.forEach(row => tbody.appendChild(row));
+
+            // Update sort indicators in header
+            const headers = table.querySelectorAll('thead th');
+            headers.forEach((th, i) => {
+                const icon = th.querySelector('[data-lucide]');
+                if (!icon) return;
+                if (i === colIndex) {
+                    icon.style.opacity = '1';
+                    icon.style.color = 'var(--accent)';
+                    // Swap icon to show direction
+                    icon.setAttribute('data-lucide', dir === 'asc' ? 'arrow-up' : 'arrow-down');
+                } else {
+                    icon.style.opacity = '0.5';
+                    icon.style.color = 'inherit';
+                    icon.setAttribute('data-lucide', 'arrow-up-down');
+                }
+            });
+            // Re-render Lucide icons to apply attribute changes
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

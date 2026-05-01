@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+{% block title %}{{ record['bag_tag'] }} — Bag Detail{% endblock %}
+
+{% block content %}
+<div class="page-header" style="flex-wrap: wrap; gap: 16px; align-items: flex-start; border-bottom: none;">
+    <div>
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap;">
+            <h1 style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 24px;">{{ record['bag_tag'] }}</h1>
+            <span class="status-badge status-{{ record['status']|replace(' ', '') }}">
+                {{ record['status'] }}
+            </span>
+        </div>
+        <nav style="font-size: 13px; color: var(--text-secondary);">
+            <a href="/" style="color: var(--text-secondary); text-decoration: none;">Home</a> <span style="margin: 0 6px;">/</span>
+            <a href="/search" style="color: var(--text-secondary); text-decoration: none;">Search</a> <span style="margin: 0 6px;">/</span>
+            <span style="color: var(--text-primary); font-weight: 500;">{{ record['bag_tag'] }}</span>
+        </nav>
+    </div>
+    <div style="display: flex; gap: 12px; align-items: center;">
+        <a href="/search" class="btn btn-outline"><i data-lucide="arrow-left" style="width: 16px; height: 16px;"></i> Back to Search</a>
+    </div>
+</div>
+
+<div class="page-body fade-in">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+
+        <!-- Left Column: Bag Info + Timeline -->
+        <div>
+            <!-- Bag Info Card -->
+            <div class="gll-card" style="margin-bottom: 24px;">
+                <div class="gll-card-header"><div style="display:flex; align-items:center; gap:6px;"><i data-lucide="briefcase" style="width:16px;height:16px;"></i> Luggage Information</div></div>
+                <div class="gll-card-body">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div>
+                            <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Bag Tag</div>
+                            <div style="font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 600; color: var(--text-primary);">{{ record['bag_tag'] }}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Booking Reference</div>
+                            <div style="font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 500; color: var(--text-secondary);">{{ record['booking_reference'] }}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Customer</div>
+                            <div style="font-size: 15px; font-weight: 600; color: var(--text-primary);">{{ record['customer_name'] }}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Last Updated</div>
+                            <div style="font-size: 14px; color: var(--text-secondary);" title="{{ record['last_updated'] }}">
+                                {{ record['last_updated']|timeago }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Journey Timeline -->
+            <div class="gll-card">
+                <div class="gll-card-header"><div style="display:flex; align-items:center; gap:6px;"><i data-lucide="map" style="width:16px;height:16px;"></i> Journey Timeline</div></div>
+                <div class="gll-card-body">
+                    {% if events %}
+                    <div style="position: relative; padding-left: 20px; border-left: 2px solid var(--border);">
+                        {% for event in events %}
+                        <div style="position: relative; margin-bottom: 24px; padding-left: 16px;">
+                            <div style="position: absolute; left: -27px; top: 2px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid {% if loop.last %}var(--accent){% else %}var(--border){% endif %}; background: {% if loop.last %}var(--accent){% else %}var(--bg-surface){% endif %};"></div>
+                            <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">{{ event['event_status'] }}</div>
+                            <div style="font-size: 13px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
+                                <i data-lucide="map-pin" style="width: 12px; height: 12px;"></i> {{ event['location'] }} 
+                                <span style="opacity: 0.5;">&bull;</span> 
+                                <i data-lucide="clock" style="width: 12px; height: 12px;"></i> {{ event['event_time']|timeago }}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div style="text-align: center; padding: 32px; color: var(--text-secondary);">
+                        <i data-lucide="map-pin-off" style="width: 32px; height: 32px; margin-bottom: 12px; opacity: 0.5;"></i>
+                        <p style="font-size: 14px;">No journey events recorded yet.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Tickets + Escalation -->
+        <div>
+            <!-- Support Tickets -->
+            <div class="gll-card" style="margin-bottom: 24px;">
+                <div class="gll-card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display:flex; align-items:center; gap:6px;"><i data-lucide="ticket" style="width:16px;height:16px;"></i> Support Tickets</div>
+                    <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500; background: var(--bg-sidebar); padding: 2px 8px; border-radius: 10px;">{{ tickets|length }} total</span>
+                </div>
+                <div class="gll-card-body" style="padding: 0;">
+                    {% if tickets %}
+                        {% for ticket in tickets %}
+                        <a href="/ticket/{{ ticket['id'] }}" style="display: block; padding: 16px 20px; border-bottom: 1px solid var(--border); text-decoration: none; color: inherit; transition: background 0.2s;" onmouseover="this.style.background='var(--bg-sidebar)'" onmouseout="this.style.background='transparent'">
+                            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+                                <div style="flex: 1; min-width: 0;">
+                                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                        <span class="priority-badge priority-{{ ticket['priority']|replace(' ', '') }}">{{ ticket['priority'] }}</span>
+                                        <span style="font-size: 14px; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                            {{ ticket['issue_description'] }}
+                                        </span>
+                                    </div>
+                                    <div style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
+                                        <span style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">#{{ ticket['id'] }}</span>
+                                        <span style="opacity: 0.5;">&bull;</span>
+                                        <span>{{ ticket['category'] or 'Uncategorized' }}</span>
+                                        <span style="opacity: 0.5;">&bull;</span>
+                                        <span>{{ ticket['created_at']|timeago }}</span>
+                                    </div>
+                                </div>
+                                <span class="status-badge status-{{ ticket['ticket_status']|replace(' ', '') }}" style="flex-shrink: 0;">
+                                    {{ ticket['ticket_status'] }}
+                                </span>
+                            </div>
+                        </a>
+                        {% endfor %}
+                    {% else %}
+                        <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                            <i data-lucide="check-circle" style="width: 32px; height: 32px; margin-bottom: 12px; color: var(--success); opacity: 0.5;"></i>
+                            <p style="font-size: 14px; margin: 0;">No support tickets for this bag.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Enhanced Escalation Form -->
+            <div class="gll-card" style="border-color: rgba(255,59,48,0.3);">
+                <div class="gll-card-header" style="background: var(--danger-bg); color: var(--danger);">
+                    <div style="display:flex; align-items:center; gap:6px;"><i data-lucide="alert-triangle" style="width:16px;height:16px;"></i> Open Issue Ticket</div>
+                </div>
+                <div class="gll-card-body" style="background: var(--danger-bg);">
+                    <form method="POST" action="/ticket/new/{{ record['bag_tag'] }}" style="margin: 0;">
+                        <!-- Priority & Category Row -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                            <div class="form-group" style="margin: 0;">
+                                <label style="color: var(--text-primary);">Priority</label>
+                                <select name="priority" class="form-control" style="background: var(--bg-surface); border-color: var(--border);">
+                                    <option value="P1">P1 - Critical</option>
+                                    <option value="P2">P2 - High</option>
+                                    <option value="P3" selected>P3 - Medium</option>
+                                    <option value="P4">P4 - Low</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label style="color: var(--text-primary);">Category</label>
+                                <select name="category" class="form-control" style="background: var(--bg-surface); border-color: var(--border);">
+                                    {% for cat in CATEGORIES %}
+                                    <option value="{{ cat }}">{{ cat }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Contact Method -->
+                        <div class="form-group">
+                            <label style="color: var(--text-primary);">Contact Method</label>
+                            <select name="contact_method" class="form-control" style="background: var(--bg-surface); border-color: var(--border);">
+                                {% for cm in CONTACT_METHODS %}
+                                <option value="{{ cm }}">{{ cm }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- Issue Description -->
+                        <div class="form-group">
+                            <label style="color: var(--text-primary);">Issue Description</label>
+                            <textarea name="issue_description" rows="3" required
+                                placeholder="Describe the discrepancy or escalation path..."
+                                class="form-control" style="background: var(--bg-surface); border-color: var(--border);"
+                            ></textarea>
+                        </div>
+                        <button type="submit" class="btn" style="background: var(--danger); color: white; width: 100%; justify-content: center; border: none;">
+                            <i data-lucide="plus-circle" style="width: 16px; height: 16px;"></i> Create Ticket
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

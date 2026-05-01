@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}Register Luggage{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i data-lucide="plus-square" style="width: 20px; height: 20px;"></i> Register Luggage</h1>
+    </div>
+</div>
+
+<div class="page-body fade-in">
+    <div style="max-width: 640px; margin: 48px auto;">
+        <div class="gll-card" style="box-shadow: var(--shadow-md);">
+            <div class="gll-card-header" style="background: var(--bg-surface); border-bottom: 1px solid var(--border); padding: 24px 32px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; background: var(--bg-sidebar); border-radius: 12px; border: 1px solid var(--border);">
+                        <i data-lucide="luggage" style="width: 24px; height: 24px; color: var(--accent);"></i>
+                    </div>
+                    <div>
+                        <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 4px 0;">New Bag Entry</h2>
+                        <p style="color: var(--text-secondary); font-size: 13px; margin: 0;">Create a tracking record and assign a unique tag.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="gll-card-body" style="padding: 32px;">
+                <form method="POST" action="/bag/new">
+                    
+                    <div style="margin-bottom: 24px;">
+                        <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">Passenger Full Name</label>
+                        <input type="text" name="customer_name" class="form-control" required placeholder="e.g. Alice Smith" autofocus>
+                    </div>
+                    
+                    <div style="margin-bottom: 24px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 0;">Booking Reference / PNR</label>
+                            <span style="font-size: 11px; color: var(--text-muted);">Required for validation</span>
+                        </div>
+                        <input type="text" name="booking_reference" class="form-control" required placeholder="e.g. BKG-12345" style="text-transform: uppercase;">
+                    </div>
+
+                    <div style="margin-bottom: 32px;">
+                        <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">Initial Origin / Check-in Location</label>
+                        <select name="initial_location" class="form-control" required>
+                            <option value="" disabled selected>Select Origin Location</option>
+                            <option value="JFK Terminal 4">JFK Terminal 4</option>
+                            <option value="LAX Terminal B">LAX Terminal B</option>
+                            <option value="ORD Concourse K">ORD Concourse K</option>
+                            <option value="ATL South Terminal">ATL South Terminal</option>
+                            <option value="DFW Gate C12">DFW Gate C12</option>
+                            <option value="MIA Carousel 7">MIA Carousel 7</option>
+                            <option value="SFO International">SFO International</option>
+                            <option value="DEN Baggage Hub">DEN Baggage Hub</option>
+                            <option value="SEA North Satellite">SEA North Satellite</option>
+                            <option value="BOS Terminal E">BOS Terminal E</option>
+                            <option value="EWR Terminal C">EWR Terminal C</option>
+                            <option value="IAD Dulles Main">IAD Dulles Main</option>
+                        </select>
+                        <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">
+                            <i data-lucide="info" style="width: 12px; height: 12px; vertical-align: middle;"></i> This will log the initial "Checked In" chronological event.
+                        </p>
+                    </div>
+
+                    <div style="padding-top: 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px;">
+                        <a href="/" class="btn btn-outline">Cancel</a>
+                        <button type="submit" class="btn btn-primary">
+                            <i data-lucide="check" style="width: 16px; height: 16px;"></i> Generate Tag & Register
+                        </button>
+                    </div>
+
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

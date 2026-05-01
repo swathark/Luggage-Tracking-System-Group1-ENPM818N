@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% block title %}Create Ticket{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i data-lucide="ticket" style="width: 20px; height: 20px;"></i> Create Service Ticket</h1>
+        <nav style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">
+            <a href="/" style="color: var(--text-secondary); text-decoration: none;">Home</a>
+            <span style="margin: 0 8px;">/</span>
+            <a href="/tickets" style="color: var(--text-secondary); text-decoration: none;">Tickets</a>
+            <span style="margin: 0 8px;">/</span>
+            <span>New Ticket</span>
+        </nav>
+    </div>
+</div>
+
+<div class="page-body fade-in">
+    <div style="max-width: 640px; margin: 48px auto;">
+        <div class="gll-card" style="box-shadow: var(--shadow-md);">
+            <div class="gll-card-header" style="background: var(--bg-surface); border-bottom: 1px solid var(--border); padding: 24px 32px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; background: var(--bg-sidebar); border-radius: 12px; border: 1px solid var(--border);">
+                        <i data-lucide="alert-circle" style="width: 24px; height: 24px; color: var(--accent);"></i>
+                    </div>
+                    <div>
+                        <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 4px 0;">New Support Ticket</h2>
+                        <p style="color: var(--text-secondary); font-size: 13px; margin: 0;">File a service ticket against a tracked luggage asset.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="gll-card-body" style="padding: 32px;">
+                <form method="POST" action="/ticket/create">
+
+                    <!-- Bag Tag Selector -->
+                    <div style="margin-bottom: 24px;">
+                        <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">Luggage Asset (Bag Tag)</label>
+                        <select name="bag_tag" class="form-control" required id="bagSelect">
+                            <option value="" disabled selected>Select a Bag Tag</option>
+                            {% for bag in bags %}
+                            <option value="{{ bag['bag_tag'] }}">{{ bag['bag_tag'] }} — {{ bag['customer_name'] }}</option>
+                            {% endfor %}
+                        </select>
+                        <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">
+                            <i data-lucide="info" style="width: 12px; height: 12px; vertical-align: middle;"></i>
+                            Can't find the bag? <a href="/bag/new" style="color: var(--accent);">Register it first</a>.
+                        </p>
+                    </div>
+
+                    <!-- Priority & Category Row -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">Priority</label>
+                            <select name="priority" class="form-control" required>
+                                {% for p in VALID_PRIORITIES %}
+                                <option value="{{ p }}" {% if p == 'P3' %}selected{% endif %}>{{ p }} — {{ PRIORITY_LABELS[p] }} ({{ SLA_HOURS[p] }}h SLA)</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">Category</label>
+                            <select name="category" class="form-control" required>
+                                {% for c in CATEGORIES %}
+                                <option value="{{ c }}">{{ c }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Contact Method -->
+                    <div style="margin-bottom: 24px;">
+                        <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">Contact Method</label>
+                        <select name="contact_method" class="form-control">
+                            {% for m in CONTACT_METHODS %}
+                            <option value="{{ m }}">{{ m }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Issue Description -->
+                    <div style="margin-bottom: 32px;">
+                        <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">Issue Description</label>
+                        <textarea name="issue_description" class="form-control" required rows="5" placeholder="Describe the issue in detail..."
+                            style="resize: vertical; min-height: 100px; font-family: inherit;"></textarea>
+                    </div>
+
+                    <!-- Actions -->
+                    <div style="padding-top: 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px;">
+                        <a href="/tickets" class="btn btn-outline">Cancel</a>
+                        <button type="submit" class="btn btn-primary">
+                            <i data-lucide="send" style="width: 16px; height: 16px;"></i> Submit Ticket
+                        </button>
+                    </div>
+
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

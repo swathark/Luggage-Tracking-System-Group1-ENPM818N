@@ -1,0 +1,283 @@
+{% extends 'base.html' %}
+{% block title %}Ticket #{{ ticket['id'] }}{% endblock %}
+
+{% block content %}
+<!-- State Progress Bar -->
+{% set states = ['New', 'In Progress', 'On Hold', 'Resolved', 'Closed'] %}
+{% set current_status = ticket['ticket_status'] %}
+{% set current_idx = states.index(current_status) if current_status in states else 0 %}
+<div style="background: var(--bg-surface); border-bottom: 1px solid var(--border); padding: 16px 32px; display: flex; align-items: center; justify-content: space-between;">
+    <div style="display: flex; align-items: center; width: 100%; max-width: 800px; margin: 0 auto; position: relative;">
+        {% for state in states %}
+        {% set idx = loop.index0 %}
+        <div style="flex: 1; text-align: center; position: relative; z-index: 1;">
+            <div style="width: 12px; height: 12px; border-radius: 50%; border: 2px solid {% if idx <= current_idx %}var(--accent){% else %}var(--border){% endif %}; background: {% if idx <= current_idx %}var(--accent){% else %}var(--bg-surface){% endif %}; margin: 0 auto 8px; position: relative; z-index: 2;"></div>
+            <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: {% if idx <= current_idx %}var(--text-primary){% else %}var(--text-muted){% endif %}">{{ state }}</div>
+        </div>
+        {% if not loop.last %}
+        <div style="position: absolute; top: 6px; left: calc({{ (idx * 25) + 12.5 }}%); width: 25%; height: 2px; background: {% if idx < current_idx %}var(--accent){% else %}var(--border){% endif %}; z-index: 0;"></div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+<div class="page-header" style="flex-wrap: wrap; gap: 16px; align-items: flex-start; border-bottom: none;">
+    <div>
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap;">
+            <h1 style="margin: 0;">Ticket #{{ ticket['id'] }}</h1>
+            <span class="status-badge status-{{ current_status|replace(' ', '') }}">
+                {{ current_status }}
+            </span>
+            <span class="priority-badge priority-{{ ticket['priority']|replace(' ', '') }}">
+                {{ ticket['priority'] }} &middot; {{ PRIORITY_LABELS.get(ticket['priority'], '') }}
+            </span>
+            {% if ticket['escalation_level'] and ticket['escalation_level'] > 0 %}
+            <span style="font-size: 11px; font-weight: 600; background: var(--danger-bg); color: var(--danger); padding: 4px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+                <i data-lucide="alert-triangle" style="width: 12px; height: 12px;"></i>
+                {% if ticket['escalation_level'] == 1 %}Escalated{% elif ticket['escalation_level'] >= 2 %}Management Escalation{% endif %}
+            </span>
+            {% endif %}
+        </div>
+        <nav style="font-size: 13px; color: var(--text-secondary);">
+            <a href="/" style="color: var(--text-secondary); text-decoration: none;">Home</a> <span style="margin: 0 6px;">/</span>
+            <a href="/tickets" style="color: var(--text-secondary); text-decoration: none;">Tickets</a> <span style="margin: 0 6px;">/</span>
+            <span style="color: var(--text-primary); font-weight: 500;">#{{ ticket['id'] }}</span>
+        </nav>
+    </div>
+    
+    <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+        <!-- SLA Timer -->
+        {% set sla = ticket['sla_due_at']|sla_remaining %}
+        {% if current_status not in ('Resolved', 'Closed') %}
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 20px; background: {% if sla.status == 'breached' or sla.status == 'critical' %}var(--danger-bg){% else %}var(--bg-sidebar){% endif %}; color: {% if sla.status == 'breached' or sla.status == 'critical' %}var(--danger){% else %}var(--text-primary){% endif %}; display: inline-flex; align-items: center; gap: 6px;">
+            <i data-lucide="clock" style="width: 14px; height: 14px;"></i> {{ sla.text }}
+        </span>
+        {% endif %}
+
+        <!-- Status Transition -->
+        {% if current_status in STATE_TRANSITIONS and STATE_TRANSITIONS[current_status] %}
+        <form method="POST" action="/ticket/update-status/{{ ticket['id'] }}" style="display: flex; gap: 8px; align-items: center; margin: 0;">
+            <select name="new_status" class="form-control" style="width: auto; padding: 8px 12px;">
+                {% for next_status in STATE_TRANSITIONS.get(current_status, []) %}
+                <option value="{{ next_status }}">Move to {{ next_status }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary">Update</button>
+        </form>
+        {% endif %}
+
+        <!-- Escalate Button -->
+        {% if current_status not in ('Resolved', 'Closed') and (ticket['escalation_level'] or 0) < 2 %}
+        <form method="POST" action="/ticket/escalate/{{ ticket['id'] }}" id="escalateForm" style="display: inline; margin: 0;">
+            <button type="button" class="btn" style="background: var(--warning-bg); color: #d97706; border: 1px solid rgba(217,119,6,0.2);"
+                onclick="showConfirm('Escalate Ticket?', 'This will increase the escalation level and may auto-bump the priority.', 'escalateForm')">
+                <i data-lucide="arrow-up-circle"></i> Escalate
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<div class="page-body fade-in">
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+
+        <!-- Left Column: Ticket Details -->
+        <div>
+            <!-- Issue Description -->
+            <div class="gll-card" style="margin-bottom: 24px;">
+                <div class="gll-card-header"><div style="display:flex; align-items:center; gap:6px;"><i data-lucide="file-text" style="width:16px;height:16px;"></i> Issue Description</div></div>
+                <div class="gll-card-body">
+                    <p style="font-size: 15px; line-height: 1.6; color: var(--text-primary); margin: 0; white-space: pre-wrap;">{{ ticket['issue_description'] }}</p>
+                </div>
+            </div>
+
+            <!-- Ticket Metadata -->
+            <div class="gll-card" style="margin-bottom: 24px;">
+                <div class="gll-card-header"><div style="display:flex; align-items:center; gap:6px;"><i data-lucide="server" style="width:16px;height:16px;"></i> Metadata</div></div>
+                <div class="gll-card-body">
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;">
+                        <div>
+                            <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Priority</div>
+                            <form method="POST" action="/ticket/update-priority/{{ ticket['id'] }}" style="display: flex; gap: 8px; align-items: center; margin: 0;">
+                                <select name="new_priority" class="form-control" style="font-size: 13px; padding: 6px 8px; width: auto;">
+                                    {% for p in VALID_PRIORITIES %}
+                                    <option value="{{ p }}" {% if p == ticket['priority'] %}selected{% endif %}>{{ p }} - {{ PRIORITY_LABELS[p] }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="btn btn-outline" style="padding: 6px 10px;">Set</button>
+                            </form>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Category</div>
+                            <div style="font-size: 14px; font-weight: 500;">{{ ticket['category'] or 'Uncategorized' }}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Contact Method</div>
+                            <div style="font-size: 14px;">{{ ticket['contact_method'] or 'N/A' }}</div>
+                        </div>
+                    </div>
+                </div>
+                {% if ticket['resolution_notes'] %}
+                <div style="padding: 16px 20px; border-top: 1px solid var(--border); background: var(--success-bg);">
+                    <div style="font-size: 11px; color: var(--success); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; font-weight: 600;">Resolution Notes</div>
+                    <p style="font-size: 14px; line-height: 1.6; color: var(--text-primary); margin: 0;">{{ ticket['resolution_notes'] }}</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Activity Stream -->
+            <div class="gll-card">
+                <div class="gll-card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display:flex; align-items:center; gap:6px;"><i data-lucide="message-square" style="width:16px;height:16px;"></i> Activity Log</div>
+                    <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500; background: var(--bg-sidebar); padding: 2px 8px; border-radius: 10px;">{{ activities|length }} items</span>
+                </div>
+                <div class="gll-card-body">
+                    <!-- Add Work Note Form -->
+                    <div style="margin-bottom: 32px; padding: 16px; background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: var(--radius-sm);">
+                        <form method="POST" action="/ticket/{{ ticket['id'] }}/note" style="margin: 0;">
+                            <textarea name="note_content" class="form-control" rows="2" placeholder="Add a work note..." required style="margin-bottom: 12px; background: var(--bg-surface);"></textarea>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <select name="author" class="form-control" style="width: 200px;">
+                                    {% for agent in AGENTS %}
+                                    <option value="{{ agent }}">{{ agent }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="btn btn-primary"><i data-lucide="send" style="width: 14px; height: 14px;"></i> Post Note</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Activity Timeline -->
+                    {% if activities %}
+                    <div style="position: relative; padding-left: 20px; border-left: 2px solid var(--border);">
+                        {% for act in activities %}
+                        <div style="position: relative; margin-bottom: 24px; padding-left: 24px;">
+                            <div style="position: absolute; left: -31px; top: 0; width: 22px; height: 22px; background: var(--bg-surface); border: 2px solid var(--border); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                                {% if act['activity_type'] == 'work_note' %}<i data-lucide="message-circle" style="width: 12px; height: 12px; color: var(--text-secondary);"></i>
+                                {% elif act['activity_type'] == 'state_change' %}<i data-lucide="refresh-cw" style="width: 12px; height: 12px; color: var(--accent);"></i>
+                                {% elif act['activity_type'] == 'assignment' %}<i data-lucide="user" style="width: 12px; height: 12px; color: var(--info);"></i>
+                                {% elif act['activity_type'] == 'escalation' %}<i data-lucide="alert-triangle" style="width: 12px; height: 12px; color: var(--danger);"></i>
+                                {% else %}<i data-lucide="activity" style="width: 12px; height: 12px; color: var(--text-muted);"></i>{% endif %}
+                            </div>
+                            <div style="background: var(--bg-sidebar); padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 13px; font-weight: 600;">{{ act['author'] }}</span>
+                                        <span style="font-size: 11px; background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px; color: var(--text-secondary);">{{ act['activity_type']|replace('_', ' ')|title }}</span>
+                                    </div>
+                                    <span style="font-size: 12px; color: var(--text-secondary);" title="{{ act['created_at'] }}">{{ act['created_at']|timeago }}</span>
+                                </div>
+                                <div style="font-size: 14px; color: var(--text-primary); line-height: 1.5;">{{ act['content'] }}</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                        <i data-lucide="inbox" style="width: 32px; height: 32px; margin-bottom: 12px; opacity: 0.5;"></i>
+                        <p style="font-size: 14px;">No activity recorded yet.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Linked Bag + Details -->
+        <div>
+            <!-- Linked Luggage -->
+            <div class="gll-card" style="margin-bottom: 24px;">
+                <div class="gll-card-header"><div style="display:flex; align-items:center; gap:6px;"><i data-lucide="link" style="width:16px;height:16px;"></i> Linked Luggage</div></div>
+                <div class="gll-card-body" style="padding: 0;">
+                    <a href="/bag/{{ ticket['bag_tag'] }}" style="display: block; padding: 24px 20px; text-align: center; text-decoration: none; color: inherit; transition: background 0.2s;" onmouseover="this.style.background='var(--bg-sidebar)'" onmouseout="this.style.background='transparent'">
+                        <i data-lucide="briefcase" style="width: 48px; height: 48px; color: var(--text-muted); margin-bottom: 16px;"></i>
+                        <div style="font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 600; color: var(--accent); margin-bottom: 12px;">{{ ticket['bag_tag'] }}</div>
+                        <span class="status-badge status-{{ ticket['status']|replace(' ', '') }}">{{ ticket['status'] }}</span>
+                    </a>
+                    <div style="padding: 16px 20px; border-top: 1px solid var(--border); font-size: 13px;">
+                        <div class="flex-between" style="margin-bottom: 12px;">
+                            <span style="color: var(--text-secondary);">Customer</span>
+                            <span style="font-weight: 500;">{{ ticket['customer_name'] }}</span>
+                        </div>
+                        <div class="flex-between" style="margin-bottom: 12px;">
+                            <span style="color: var(--text-secondary);">Booking Ref</span>
+                            <span style="font-family: 'JetBrains Mono', monospace;">{{ ticket['booking_reference'] }}</span>
+                        </div>
+                        <div class="flex-between">
+                            <span style="color: var(--text-secondary);">Last Ping</span>
+                            <span>{{ ticket['last_updated']|timeago }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Assignment -->
+            <div class="gll-card" style="margin-bottom: 24px;">
+                <div class="gll-card-header"><div style="display:flex; align-items:center; gap:6px;"><i data-lucide="users" style="width:16px;height:16px;"></i> Assignment</div></div>
+                <div class="gll-card-body">
+                    <form method="POST" action="/ticket/assign/{{ ticket['id'] }}" style="margin: 0;">
+                        <div class="form-group">
+                            <label>Assigned Team</label>
+                            <select name="assigned_team" class="form-control">
+                                {% for team in TEAMS %}
+                                <option value="{{ team }}" {% if team == ticket['assigned_team'] %}selected{% endif %}>{{ team }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Assigned Agent</label>
+                            <select name="assigned_agent" class="form-control">
+                                {% for agent in AGENTS %}
+                                <option value="{{ agent }}" {% if agent == ticket['assigned_agent'] %}selected{% endif %}>{{ agent }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-secondary" style="width: 100%; justify-content: center;">Update Assignment</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Resolve Form -->
+            {% if current_status in ('In Progress', 'New', 'On Hold') %}
+            <div class="gll-card" style="margin-bottom: 24px;">
+                <div class="gll-card-header" style="background: var(--success-bg); color: var(--success);"><div style="display:flex; align-items:center; gap:6px;"><i data-lucide="check-circle" style="width:16px;height:16px;"></i> Resolve Ticket</div></div>
+                <div class="gll-card-body" style="background: var(--success-bg);">
+                    <form method="POST" action="/ticket/resolve/{{ ticket['id'] }}" style="margin: 0;">
+                        <textarea name="resolution_notes" class="form-control" rows="3" placeholder="Summarize the definitive resolution..." required style="margin-bottom: 12px; border-color: rgba(52,199,89,0.3);"></textarea>
+                        <button type="submit" class="btn" style="background: var(--success); color: white; width: 100%; justify-content: center; border: none;">Close & Resolve</button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Timestamps -->
+            <div class="gll-card">
+                <div class="gll-card-header"><div style="display:flex; align-items:center; gap:6px;"><i data-lucide="calendar" style="width:16px;height:16px;"></i> Timestamps</div></div>
+                <div class="gll-card-body" style="font-size: 13px;">
+                    <div class="flex-between" style="margin-bottom: 12px;">
+                        <span style="color: var(--text-secondary);">Created</span>
+                        <span title="{{ ticket['created_at'] }}">{{ ticket['created_at']|timeago }}</span>
+                    </div>
+                    {% if ticket['resolved_at'] %}
+                    <div class="flex-between" style="margin-bottom: 12px;">
+                        <span style="color: var(--text-secondary);">Resolved</span>
+                        <span style="color: var(--success);" title="{{ ticket['resolved_at'] }}">{{ ticket['resolved_at']|timeago }}</span>
+                    </div>
+                    {% endif %}
+                    {% if ticket['closed_at'] %}
+                    <div class="flex-between" style="margin-bottom: 12px;">
+                        <span style="color: var(--text-secondary);">Closed</span>
+                        <span title="{{ ticket['closed_at'] }}">{{ ticket['closed_at']|timeago }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="flex-between">
+                        <span style="color: var(--text-secondary);">SLA Due</span>
+                        {% set sla = ticket['sla_due_at']|sla_remaining %}
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500; color: {% if sla.status == 'breached' or sla.status == 'critical' %}var(--danger){% else %}var(--text-primary){% endif %};">{{ sla.text }}</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

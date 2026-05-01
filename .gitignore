@@ -1,0 +1,84 @@
+# ==========================================
+# Terraform
+# ==========================================
+
+# Local .terraform directories (provider cache, modules)
+**/.terraform/*
+.terraform/
+
+# State files — contain sensitive data, never commit
+*.tfstate
+*.tfstate.*
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Ignore override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Ignore CLI configuration files
+.terraformrc
+terraform.rc
+
+# Terraform build artifacts (auto-generated during plan/apply)
+terraform/app.zip
+src/lambda_function.zip
+
+# ==========================================
+# Python
+# ==========================================
+
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+venv/
+env/
+.venv/
+
+# ==========================================
+# Local development databases
+# ==========================================
+
+*.db
+*.sqlite3
+
+# ==========================================
+# Internal / non-deliverable files
+# ==========================================
+
+SESSION_SUMMARY.md
+aws_screenshot_checklist.md
+ec2_log.txt
+log_snippet.txt
+
+# Professor's original baseline templates (not our deliverable)
+deliverables/professor-template/
+
+# Internal prep guides (not for submission)
+deliverables/screenshot_evidence_guide.md
+deliverables/professor_demo_guide.md
+
+# ==========================================
+# OS-specific files
+# ==========================================
+
+.DS_Store
+__MACOSX/
+Thumbs.db
+Desktop.ini
+
+# ==========================================
+# IDE and editor files
+# ==========================================
+
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

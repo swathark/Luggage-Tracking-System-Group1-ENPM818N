@@ -1,0 +1,278 @@
+{% extends 'base.html' %}
+{% block title %}Ticket Center{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Ticket Center</h1>
+        <nav style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">
+            <a href="/" style="color: var(--text-secondary); text-decoration: none;">Home</a>
+            <span style="margin: 0 8px;">/</span>
+            <span>Tickets</span>
+        </nav>
+    </div>
+</div>
+
+<div class="page-body fade-in">
+    <!-- Top Section: KPIs + Chart -->
+    <div style="display: grid; grid-template-columns: 1fr 300px; gap: 24px; margin-bottom: 32px;">
+        <!-- KPI Cards -->
+        <div>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px;">
+                <div class="gll-card gll-card-body" style="border-radius: var(--radius-sm); padding: 16px;">
+                    <i data-lucide="layers" style="width: 20px; height: 20px; color: var(--text-secondary); margin-bottom: 8px;"></i>
+                    <div style="font-size: 24px; font-weight: 700;">{{ total_count }}</div>
+                    <div style="font-size: 13px; color: var(--text-secondary);">Total Tickets</div>
+                </div>
+                <div class="gll-card gll-card-body" style="border-radius: var(--radius-sm); padding: 16px;">
+                    <i data-lucide="alert-circle" style="width: 20px; height: 20px; color: var(--danger); margin-bottom: 8px;"></i>
+                    <div style="font-size: 24px; font-weight: 700; color: var(--danger);">{{ active_count }}</div>
+                    <div style="font-size: 13px; color: var(--text-secondary);">Active</div>
+                </div>
+                <div class="gll-card gll-card-body" style="border-radius: var(--radius-sm); padding: 16px;">
+                    <i data-lucide="check-circle" style="width: 20px; height: 20px; color: var(--success); margin-bottom: 8px;"></i>
+                    <div style="font-size: 24px; font-weight: 700; color: var(--success);">{{ status_counts.get('Resolved', 0) + status_counts.get('Closed', 0) }}</div>
+                    <div style="font-size: 13px; color: var(--text-secondary);">Resolved/Closed</div>
+                </div>
+                <div class="gll-card gll-card-body" style="border-radius: var(--radius-sm); padding: 16px; background: var(--danger-bg); border-color: rgba(255,59,48,0.2);">
+                    <i data-lucide="clock" style="width: 20px; height: 20px; color: var(--danger); margin-bottom: 8px;"></i>
+                    <div style="font-size: 24px; font-weight: 700; color: var(--danger);">{{ sla_breached }}</div>
+                    <div style="font-size: 13px; color: var(--danger);">SLA Breached</div>
+                </div>
+            </div>
+            <!-- Per-state mini-badges -->
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                {% for status in VALID_STATUSES %}
+                <a href="/tickets?status={{ status }}" style="text-decoration: none;">
+                    <span class="status-badge status-{{ status|replace(' ', '') }}" style="cursor: pointer; padding: 4px 12px; font-family: 'JetBrains Mono', monospace; font-weight: 500;">
+                        {{ status }}: {{ status_counts.get(status, 0) }}
+                    </span>
+                </a>
+                {% endfor %}
+
+                <a href="/ticket/create" class="btn btn-primary" style="margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; padding: 8px 18px; border-radius: 8px; text-decoration: none; box-shadow: var(--shadow-sm);">
+                    <i data-lucide="plus" style="width: 16px; height: 16px;"></i> Create Ticket
+                </a>
+            </div>
+        </div>
+
+        <!-- Pie Chart -->
+        <div class="gll-card">
+            <div class="gll-card-header">
+                <div><i data-lucide="pie-chart" style="width: 14px; height: 14px; margin-right: 6px; vertical-align: middle;"></i> Distribution</div>
+            </div>
+            <div class="gll-card-body" style="display: flex; align-items: center; justify-content: center; height: 160px; padding: 10px;">
+                <canvas id="ticketPieChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Tabs -->
+    <div style="display: flex; gap: 16px; align-items: center; margin-bottom: 24px; flex-wrap: wrap;">
+        <div class="filter-tabs" style="margin-bottom: 0;">
+            <a href="/tickets" class="filter-tab {% if status_filter == 'all' %}active{% endif %}">
+                All <span style="margin-left: 6px; background: rgba(0,0,0,0.1); padding: 2px 6px; border-radius: 10px;">{{ total_count }}</span>
+            </a>
+            {% for status in VALID_STATUSES %}
+            <a href="/tickets?status={{ status }}" class="filter-tab {% if status_filter == status %}active{% endif %}">
+                {{ status }} <span style="margin-left: 6px; background: rgba(0,0,0,0.1); padding: 2px 6px; border-radius: 10px;">{{ status_counts.get(status, 0) }}</span>
+            </a>
+            {% endfor %}
+        </div>
+        
+        <!-- Priority & Team Filters -->
+        <div style="display: flex; gap: 12px; margin-left: auto;">
+            <select class="form-control" onchange="applyFilter('priority', this.value)" style="width: auto; padding: 8px 32px 8px 12px;">
+                <option value="all" {% if priority_filter == 'all' %}selected{% endif %}>All Priorities</option>
+                {% for p in VALID_PRIORITIES %}
+                <option value="{{ p }}" {% if priority_filter == p %}selected{% endif %}>{{ p }} - {{ PRIORITY_LABELS[p] }}</option>
+                {% endfor %}
+            </select>
+            <select class="form-control" onchange="applyFilter('team', this.value)" style="width: auto; padding: 8px 32px 8px 12px;">
+                <option value="all" {% if team_filter == 'all' %}selected{% endif %}>All Teams</option>
+                {% for t in TEAMS %}
+                <option value="{{ t }}" {% if team_filter == t %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <!-- Tickets Table -->
+    <div class="gll-card table-responsive">
+        <form id="bulkForm" method="POST" action="/tickets/bulk-action">
+        {% if tickets %}
+        <table class="gll-table" id="ticketsTable">
+            <thead>
+                <tr>
+                    <th style="width: 40px; text-align: center;">
+                        <input type="checkbox" id="selectAll" onclick="toggleSelectAll(this)" style="cursor: pointer; accent-color: var(--accent);">
+                    </th>
+                    <th onclick="sortTable('ticketsTable', 1)" style="cursor: pointer;">ID <i data-lucide="arrow-up-down" style="width: 12px; height: 12px; opacity: 0.5;"></i></th>
+                    <th onclick="sortTable('ticketsTable', 2)" style="cursor: pointer;">Priority <i data-lucide="arrow-up-down" style="width: 12px; height: 12px; opacity: 0.5;"></i></th>
+                    <th onclick="sortTable('ticketsTable', 3)" style="cursor: pointer;">Bag Tag <i data-lucide="arrow-up-down" style="width: 12px; height: 12px; opacity: 0.5;"></i></th>
+                    <th onclick="sortTable('ticketsTable', 4)" style="cursor: pointer;">Customer <i data-lucide="arrow-up-down" style="width: 12px; height: 12px; opacity: 0.5;"></i></th>
+                    <th onclick="sortTable('ticketsTable', 5)" style="cursor: pointer;">Description <i data-lucide="arrow-up-down" style="width: 12px; height: 12px; opacity: 0.5;"></i></th>
+                    <th onclick="sortTable('ticketsTable', 6)" style="cursor: pointer;">Status <i data-lucide="arrow-up-down" style="width: 12px; height: 12px; opacity: 0.5;"></i></th>
+                    <th onclick="sortTable('ticketsTable', 7)" style="cursor: pointer;">Team <i data-lucide="arrow-up-down" style="width: 12px; height: 12px; opacity: 0.5;"></i></th>
+                    <th onclick="sortTable('ticketsTable', 8)" style="cursor: pointer;">Created <i data-lucide="arrow-up-down" style="width: 12px; height: 12px; opacity: 0.5;"></i></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ticket in tickets %}
+                {% set sla = ticket['sla_due_at']|sla_remaining %}
+                <tr class="clickable-row" 
+                    style="{% if sla.status == 'breached' and ticket['ticket_status'] not in ('Resolved', 'Closed') %}background-color: var(--danger-bg);{% endif %}"
+                    onclick="if(!event.target.closest('input, form, a')) window.location='/ticket/{{ ticket['id'] }}'">
+                    <td onclick="event.stopPropagation()" style="text-align: center;">
+                        <input type="checkbox" class="bulk-check" name="ticket_ids" value="{{ ticket['id'] }}" onchange="updateBulkBar()" style="cursor: pointer; accent-color: var(--accent);">
+                    </td>
+                    <td><span style="font-weight: 600; font-family: 'JetBrains Mono', monospace; color: var(--text-secondary);">#{{ ticket['id'] }}</span></td>
+                    <td>
+                        <span class="priority-badge priority-{{ ticket['priority']|replace(' ', '') }}">{{ ticket['priority'] }}</span>
+                    </td>
+                    <td><a href="/bag/{{ ticket['bag_tag'] }}" style="font-family: 'JetBrains Mono', monospace; text-decoration: none; color: var(--accent); font-weight: 500;" onclick="event.stopPropagation()">{{ ticket['bag_tag'] }}</a></td>
+                    <td style="font-weight: 500;">{{ ticket['customer_name'] }}</td>
+                    <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--text-secondary);">{{ ticket['issue_description'] }}</td>
+                    <td>
+                        <span class="status-badge status-{{ ticket['ticket_status']|replace(' ', '') }}">
+                            {{ ticket['ticket_status'] }}
+                        </span>
+                    </td>
+                    <td style="font-size: 13px; color: var(--text-secondary);">{{ ticket['assigned_team'] or '-' }}</td>
+                    <td style="font-size: 13px; color: var(--text-secondary);">
+                        {{ ticket['created_at']|timeago }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="text-align: center; padding: 64px 20px;">
+            <div style="display: flex; align-items: center; justify-content: center; width: 64px; height: 64px; background: var(--bg-sidebar); border-radius: 50%; margin: 0 auto 24px;">
+                <i data-lucide="inbox" style="width: 32px; height: 32px; color: var(--text-muted);"></i>
+            </div>
+            <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">No Tickets</h3>
+            <p style="color: var(--text-secondary); font-size: 14px; margin: 0;">
+                {% if status_filter != 'all' %}No {{ status_filter|lower }} tickets found.{% else %}No support tickets exist yet.{% endif %}
+            </p>
+        </div>
+        {% endif %}
+
+        <!-- Bulk Action Bar -->
+        <div id="bulkBar" style="position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(100px); background: #1C1C1E; color: #FFF; padding: 12px 24px; border-radius: 30px; box-shadow: var(--shadow-lg); display: flex; align-items: center; gap: 16px; z-index: 1000; opacity: 0; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); pointer-events: none;">
+            <span style="font-size: 14px; font-weight: 600; white-space: nowrap;"><span id="bulkCount">0</span> Selected</span>
+            <div style="width: 1px; height: 24px; background: rgba(255,255,255,0.2);"></div>
+            <input type="hidden" name="bulk_action" id="bulkAction">
+            
+            <button type="button" class="btn btn-primary" onclick="doBulk('close')" style="background: var(--danger); border: none; font-size: 13px; padding: 6px 12px;"><i data-lucide="check-circle" style="width: 14px; height: 14px;"></i> Close</button>
+            <div style="width: 1px; height: 24px; background: rgba(255,255,255,0.2);"></div>
+
+            <select id="bulkTeamSelect" style="background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #FFF; padding: 6px 10px; border-radius: var(--radius-sm); font-size: 13px; outline: none;">
+                {% for t in TEAMS %}
+                <option value="{{ t }}" style="color: #000;">{{ t }}</option>
+                {% endfor %}
+            </select>
+            <input type="hidden" name="bulk_team" id="bulkTeamHidden">
+            <button type="button" class="btn btn-primary" onclick="doBulk('assign')" style="font-size: 13px; padding: 6px 12px;"><i data-lucide="user-plus" style="width: 14px; height: 14px;"></i> Assign</button>
+            
+            <div style="width: 1px; height: 24px; background: rgba(255,255,255,0.2);"></div>
+            
+            <select id="bulkPrioritySelect" style="background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #FFF; padding: 6px 10px; border-radius: var(--radius-sm); font-size: 13px; outline: none;">
+                {% for p in VALID_PRIORITIES %}
+                <option value="{{ p }}" style="color: #000;">{{ p }}</option>
+                {% endfor %}
+            </select>
+            <input type="hidden" name="bulk_priority" id="bulkPriorityHidden">
+            <button type="button" class="btn btn-primary" onclick="doBulk('priority')" style="font-size: 13px; padding: 6px 12px;"><i data-lucide="alert-triangle" style="width: 14px; height: 14px;"></i> Priority</button>
+
+            <button type="button" style="background:transparent; border:none; color:#FFF; cursor:pointer; opacity:0.6; display:flex;" onclick="clearSelection();"><i data-lucide="x" style="width:16px;height:16px;"></i></button>
+        </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+<script>
+    const corporateColors = ['#007AFF', '#34C759', '#FF9500', '#FF3B30', '#8E8E93'];
+
+    const ctx = document.getElementById('ticketPieChart');
+    if (ctx) {
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: {{ VALID_STATUSES|tojson }},
+                datasets: [{
+                    data: [
+                        {% for s in VALID_STATUSES %}{{ status_counts.get(s, 0) }}{% if not loop.last %}, {% endif %}{% endfor %}
+                    ],
+                    backgroundColor: corporateColors,
+                    borderWidth: 0,
+                    hoverOffset: 4,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '65%',
+                plugins: {
+                    legend: {
+                        position: 'left',
+                        labels: { boxWidth: 10, padding: 12, font: { size: 10, family: 'Inter' } }
+                    }
+                }
+            }
+        });
+    }
+
+    // Filter helper
+    function applyFilter(key, value) {
+        const url = new URL(window.location);
+        if (value === 'all') {
+            url.searchParams.delete(key);
+        } else {
+            url.searchParams.set(key, value);
+        }
+        window.location = url.toString();
+    }
+
+    // Bulk selection logic
+    function toggleSelectAll(master) {
+        document.querySelectorAll('.bulk-check').forEach(cb => { cb.checked = master.checked; });
+        updateBulkBar();
+    }
+
+    function updateBulkBar() {
+        const checked = document.querySelectorAll('.bulk-check:checked').length;
+        const bar = document.getElementById('bulkBar');
+        document.getElementById('bulkCount').textContent = checked;
+        if (checked > 0) {
+            bar.style.transform = 'translateX(-50%) translateY(0)';
+            bar.style.opacity = '1';
+            bar.style.pointerEvents = 'auto';
+        } else {
+            bar.style.transform = 'translateX(-50%) translateY(100px)';
+            bar.style.opacity = '0';
+            bar.style.pointerEvents = 'none';
+        }
+    }
+
+    function doBulk(action) {
+        document.getElementById('bulkAction').value = action;
+        if (action === 'assign') {
+            document.getElementById('bulkTeamHidden').value = document.getElementById('bulkTeamSelect').value;
+        }
+        if (action === 'priority') {
+            document.getElementById('bulkPriorityHidden').value = document.getElementById('bulkPrioritySelect').value;
+        }
+        document.getElementById('bulkForm').submit();
+    }
+
+    function clearSelection() {
+        document.querySelectorAll('.bulk-check').forEach(cb => { cb.checked = false; });
+        document.getElementById('selectAll').checked = false;
+        updateBulkBar();
+    }
+</script>
+{% endblock %}

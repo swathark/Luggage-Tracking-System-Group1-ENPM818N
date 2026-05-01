@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}Search Luggage{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i data-lucide="search" style="width: 20px; height: 20px;"></i> Search Luggage</h1>
+    </div>
+</div>
+<div class="page-body fade-in">
+    <div style="max-width: 640px; margin: 48px auto;">
+        <div class="gll-card" style="box-shadow: var(--shadow-md);">
+            <div class="gll-card-body" style="padding: 48px 40px;">
+                <div style="text-align: center; margin-bottom: 36px;">
+                    <div style="display: flex; align-items: center; justify-content: center; width: 64px; height: 64px; background: var(--bg-sidebar); border-radius: 16px; margin: 0 auto 20px; border: 1px solid var(--border);">
+                        <i data-lucide="briefcase" style="width: 32px; height: 32px; color: var(--accent);"></i>
+                    </div>
+                    <h2 style="font-size: 24px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.5px;">Luggage Locator</h2>
+                    <p style="color: var(--text-secondary); font-size: 15px;">Enter a Bag Tag, Booking Reference, or Passenger Name</p>
+                </div>
+                <form method="POST" action="/search">
+                    <div class="search-input-group" style="margin-bottom: 24px; height: 56px;">
+                        <input type="text" name="query" placeholder="e.g. BAG-A1B2, BKG-12345, or Alice Smith" required autofocus>
+                        <button type="submit">
+                            <i data-lucide="arrow-right"></i>
+                        </button>
+                    </div>
+                </form>
+                <div style="text-align: center;">
+                    <p style="font-size: 13px; color: var(--text-muted);">
+                        Search across <strong style="color: var(--text-secondary);">bag tags</strong>, <strong style="color: var(--text-secondary);">booking references</strong>, and <strong style="color: var(--text-secondary);">names</strong>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

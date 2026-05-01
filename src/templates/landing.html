@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<style>
+    .hero {
+        background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-sidebar) 100%);
+        padding: 60px 32px;
+        border-bottom: 1px solid var(--border);
+    }
+    .hero-content {
+        max-width: 700px;
+        margin: 0 auto;
+        text-align: center;
+    }
+    .hero-badge {
+        display: inline-flex; align-items: center; gap: 6px;
+        background: var(--success-bg);
+        color: var(--success);
+        padding: 6px 16px; border-radius: 20px;
+        font-size: 13px; font-weight: 600; margin-bottom: 24px;
+        border: 1px solid rgba(52, 199, 89, 0.2);
+    }
+    .hero h1 {
+        font-size: 40px; font-weight: 700;
+        letter-spacing: -1px; line-height: 1.1; margin-bottom: 16px;
+        color: var(--text-primary);
+    }
+    .hero p {
+        font-size: 18px; color: var(--text-secondary);
+        line-height: 1.5; margin-bottom: 32px;
+    }
+    .stats-bar {
+        display: flex; gap: 48px;
+        padding: 24px 32px;
+        background: var(--bg-surface);
+        border-bottom: 1px solid var(--border);
+        justify-content: center;
+    }
+    .stat-item {
+        display: flex; flex-direction: column; align-items: center; text-align: center;
+    }
+    .stat-value {
+        font-size: 24px; font-weight: 700; color: var(--text-primary);
+    }
+    .stat-label {
+        font-size: 13px; color: var(--text-secondary); font-weight: 500;
+        display: flex; align-items: center; gap: 4px; margin-top: 4px;
+    }
+    .features-grid {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;
+        padding: 48px 32px;
+        max-width: 1000px; margin: 0 auto;
+    }
+    .feature-icon {
+        width: 48px; height: 48px; border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        background: var(--bg-sidebar); color: var(--text-primary);
+        margin-bottom: 16px; border: 1px solid var(--border);
+    }
+    .feature-icon svg { width: 24px; height: 24px; }
+    
+    .quick-actions {
+        display: flex; gap: 16px; justify-content: center; padding-bottom: 48px;
+    }
+</style>
+
+<!-- Hero Section -->
+<div class="hero fade-in">
+    <div class="hero-content">
+        <h1>Global Luggage Logistics</h1>
+        <p>Search, monitor, and manage luggage assets across the global network.</p>
+        <div class="search-container">
+            <form method="POST" action="/search">
+                <div class="search-input-group">
+                    <input type="text" name="query" placeholder="Bag Tag, Booking Ref, or Name..." required autofocus>
+                    <button type="submit">
+                        <i data-lucide="search" style="width:16px; height:16px;"></i> Search
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Live Stats Bar -->
+<div class="stats-bar fade-in">
+    <div class="stat-item">
+        <div class="stat-value">{{ total_bags }}</div>
+        <div class="stat-label"><i data-lucide="briefcase" style="width:14px; height:14px; color:var(--accent);"></i> Bags Tracked</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value">{{ open_tickets }}</div>
+        <div class="stat-label"><i data-lucide="ticket" style="width:14px; height:14px; color:var(--danger);"></i> Open Tickets</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value">{{ delivered }}</div>
+        <div class="stat-label"><i data-lucide="package-check" style="width:14px; height:14px; color:var(--success);"></i> Delivered</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value">{{ delivery_rate }}%</div>
+        <div class="stat-label"><i data-lucide="activity" style="width:14px; height:14px; color:var(--info);"></i> Delivery Rate</div>
+    </div>
+</div>
+
+<!-- Feature Cards -->
+<div class="features-grid">
+    <div class="gll-card gll-card-body fade-in">
+        <div class="feature-icon"><i data-lucide="map-pin"></i></div>
+        <h3 class="text-semibold" style="margin-bottom: 8px;">Real-Time Tracking</h3>
+        <p class="text-muted" style="font-size: 14px; line-height: 1.5;">Search and monitor luggage across airports with live status updates, chronological journey timelines, and instant routing visibility.</p>
+    </div>
+    <div class="gll-card gll-card-body fade-in">
+        <div class="feature-icon"><i data-lucide="inbox"></i></div>
+        <h3 class="text-semibold" style="margin-bottom: 8px;">Ticket Management</h3>
+        <p class="text-muted" style="font-size: 14px; line-height: 1.5;">Create, track, and resolve support tickets with full audit trails. Integrated seamlessly with the global ops queue.</p>
+    </div>
+    <div class="gll-card gll-card-body fade-in">
+        <div class="feature-icon"><i data-lucide="bar-chart-2"></i></div>
+        <h3 class="text-semibold" style="margin-bottom: 8px;">Operational Analytics</h3>
+        <p class="text-muted" style="font-size: 14px; line-height: 1.5;">Agent dashboard with real-time KPIs, status distribution breakdowns, and activity feeds to optimize handling operations.</p>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="quick-actions fade-in">
+    <a href="/search" class="btn btn-secondary"><i data-lucide="search"></i> Search Luggage</a>
+    <a href="/tickets" class="btn btn-secondary"><i data-lucide="list"></i> View All Tickets</a>
+    <a href="/dashboard" class="btn btn-secondary"><i data-lucide="pie-chart"></i> Agent Dashboard</a>
+</div>
+{% endblock %}
