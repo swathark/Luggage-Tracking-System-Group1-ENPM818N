@@ -408,4 +408,4 @@ All required evidence screenshots are compiled in the `Updated_screenshots.docx`
 
 ---
 
-*ENPM818N — Cloud Computing and DevSecOps — Spring 2026*
+
