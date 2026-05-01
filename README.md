@@ -20,8 +20,9 @@
 12. [Logging, Monitoring, and Observability](#logging-monitoring-and-observability)
 13. [Cost Awareness](#cost-awareness)
 14. [Screenshot Evidence](#screenshot-evidence)
-15. [Challenges Faced](#challenges-faced)
-16. [Team Contribution Summary](#team-contribution-summary)
+15. [Portal Features to Try Out](#portal-features-to-try-out)
+16. [Challenges Faced](#challenges-faced)
+17. [Team Contribution Summary](#team-contribution-summary)
 
 ---
 
@@ -578,6 +579,116 @@ All required evidence screenshots are compiled in the `Screenshots.docx` file in
 
 ### Additional Evidence
 - AWS Backup plan and vault configuration
+
+---
+
+## Portal Features to Try Out
+
+Beyond the core search-and-track functionality, the portal includes several production-grade features worth exploring:
+
+### 1. Bulk Actions on Tickets
+
+From the Ticket Center, select multiple tickets using the checkboxes and apply bulk operations:
+
+- **Bulk Close**: Close all selected tickets in a single action
+- **Bulk Assign**: Reassign all selected tickets to a different team (e.g., move 5 tickets to "Routing and Transfer" at once)
+- **Bulk Priority Change**: Upgrade or downgrade the priority of multiple tickets simultaneously
+
+Each bulk action is individually logged in every affected ticket's activity trail with a "System" author tag.
+
+### 2. Ticket Escalation Engine
+
+Click the **Escalate** button on any ticket detail page to trigger the escalation workflow:
+
+| Escalation Level | Effect |
+|------------------|--------|
+| Level 0 (Normal) | Default state |
+| Level 1 (Escalated) | If priority is P3 or P4, auto-bumps to P2 |
+| Level 2 (Management) | Auto-bumps to P1, reassigns to "Management Escalation" team |
+
+Escalation is a one-way ratchet — each click increases the level and cannot be reversed.
+
+### 3. SLA Tracking and Breach Detection
+
+Every ticket has an SLA deadline calculated from its priority:
+
+| Priority | SLA Window |
+|----------|------------|
+| P1 (Critical) | 1 hour |
+| P2 (High) | 4 hours |
+| P3 (Medium) | 24 hours |
+| P4 (Low) | 72 hours |
+
+The ticket detail page shows a live SLA countdown with color-coded indicators (green, yellow, red, breached). Changing a ticket's priority automatically recalculates the SLA deadline. The Ticket Center sidebar shows the total count of SLA-breached tickets.
+
+### 4. State Machine Transitions
+
+Ticket status changes follow a strict state machine that prevents invalid transitions:
+
+```
+New  -->  In Progress  -->  Resolved  -->  Closed
+  \           |    \                       /
+   \--> On Hold --/  \---- Closed -------/
+                                  \--> New (Reopen)
+```
+
+For example, you cannot jump directly from "New" to "Resolved" — you must go through "In Progress" first. The UI only shows valid transition buttons.
+
+### 5. Auto-Assignment
+
+When creating a ticket, the system automatically assigns a team and agent based on the issue category:
+
+| Category | Auto-Assigned Team |
+|----------|--------------------|
+| Damage | Baggage Handling |
+| Lost, Delayed, Misrouted | Routing and Transfer |
+| Security | Security and Compliance |
+| Other | Customer Relations |
+
+Agents are distributed using a hash-based algorithm to ensure even workload distribution.
+
+### 6. Work Notes and Activity Trail
+
+Every ticket maintains a full audit trail. From the ticket detail page:
+
+- Add free-text **work notes** with author attribution
+- View the complete **activity history**: status changes, priority changes, escalations, assignments, and notes — all timestamped
+- Activity entries show both old and new values for every state change
+
+### 7. Advanced Ticket Filtering
+
+The Ticket Center supports multi-dimensional filtering:
+
+- **By Status**: New, In Progress, On Hold, Resolved, Closed
+- **By Priority**: P1 through P4
+- **By Team**: Filter by assigned team
+
+Tickets are automatically sorted by priority (P1 first) and then by creation date (newest first).
+
+### 8. Contextual Ticket Creation
+
+Tickets can be created in two ways:
+
+- **Standalone**: From the Ticket Center, selecting any bag from a dropdown
+- **Contextual**: From a bag's detail page, pre-populated with the bag tag — useful for creating tickets while reviewing a bag's status timeline
+
+### 9. Analytics Dashboard
+
+The Dashboard aggregates real-time metrics from both the Luggage and Ticket services:
+
+- Total bags tracked, delivery rate, average events per bag
+- Ticket status distribution, priority breakdown, team workload
+- SLA compliance rate and breach count
+- Escalation statistics
+- 10 most recent tickets with live priority badges
+
+### 10. Multi-Identifier Search
+
+The search engine supports three types of queries in a single input field:
+
+- **Exact match by Bag Tag**: e.g., `BAG-A1B2C3D4`
+- **Exact match by Booking Reference**: e.g., `BK-20250101-ABCD`
+- **Fuzzy match by Customer Name**: partial name matching (e.g., searching "Smith" returns all customers with "Smith" in their name)
 
 ---
 
