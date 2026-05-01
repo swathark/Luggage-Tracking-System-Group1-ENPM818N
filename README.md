@@ -12,11 +12,16 @@
 4. [Architecture Walkthrough](#architecture-walkthrough)
 5. [Terraform Module Wiring](#terraform-module-wiring)
 6. [Security Posture](#security-posture)
-7. [High Availability and Disaster Recovery](#high-availability-and-disaster-recovery)
-8. [Logging, Monitoring, and Observability](#logging-monitoring-and-observability)
-9. [Cost Awareness](#cost-awareness)
-10. [Screenshot Evidence](#screenshot-evidence)
-11. [Team Contribution Summary](#team-contribution-summary)
+7. [Microservices Architecture](#microservices-architecture)
+8. [Fault Tolerance](#fault-tolerance)
+9. [Failover Mechanisms](#failover-mechanisms)
+10. [Health Checks and Self-Healing](#health-checks-and-self-healing)
+11. [Data Backups and Replication](#data-backups-and-replication)
+12. [Logging, Monitoring, and Observability](#logging-monitoring-and-observability)
+13. [Cost Awareness](#cost-awareness)
+14. [Screenshot Evidence](#screenshot-evidence)
+15. [Challenges Faced](#challenges-faced)
+16. [Team Contribution Summary](#team-contribution-summary)
 
 ---
 
@@ -288,25 +293,204 @@ The application is fronted by an Application Load Balancer (ALB), which automati
 
 ---
 
-## High Availability and Disaster Recovery
+## Microservices Architecture
+
+The application follows a modular microservice pattern implemented using Flask Blueprints. Each service owns a specific business domain and communicates with other services through internal JSON API endpoints, eliminating tightly coupled database JOINs across domain boundaries.
+
+### Service Decomposition
+
+```
+src/
+  app.py                          # API Gateway — registers all Blueprints, health check
+  services/
+    luggage/                      # Luggage Service (bag records, events, search)
+      __init__.py                 #   Blueprint registration
+      routes.py                  #   User-facing routes (search, bag detail, register)
+      api.py                     #   Internal JSON API (/api/luggage/<bag_tag>, /api/luggage/stats)
+    tickets/                      # Ticket Service (support tickets, SLA tracking)
+      __init__.py                 #   Blueprint registration
+      routes.py                  #   User-facing routes (ticket list, create, update)
+      api.py                     #   Internal JSON API (/api/tickets/by-bag/<tag>, /api/tickets/stats)
+    analytics/                    # Analytics Service (dashboard, metrics aggregation)
+      __init__.py                 #   Blueprint registration
+      routes.py                  #   Dashboard route — consumes Luggage + Ticket APIs
+  shared/
+    db.py                         # Shared database connection layer
+    constants.py                  # Shared constants (statuses, priorities, SLA definitions)
+```
+
+### Inter-Service Communication
+
+Services communicate through internal JSON API calls rather than direct cross-domain database queries:
+
+| Consumer | Provider | API Endpoint | Purpose |
+|----------|----------|--------------|---------|
+| Ticket Service | Luggage Service | `/api/luggage/<bag_tag>` | Fetch bag details when creating/viewing tickets |
+| Ticket Service | Luggage Service | `/api/luggage/all-tags` | Populate bag selector dropdown on ticket creation form |
+| Ticket Service | Luggage Service | `/api/luggage/batch?tags=...` | Batch-resolve customer names for ticket list views |
+| Analytics Service | Luggage Service | `/api/luggage/stats` | Aggregate luggage metrics for dashboard |
+| Analytics Service | Ticket Service | `/api/tickets/stats` | Aggregate ticket metrics for dashboard |
+| Analytics Service | Ticket Service | `/api/tickets/recent` | Display recent ticket activity on dashboard |
+| Luggage Service | Ticket Service | `/api/tickets/by-bag/<tag>` | Show related tickets on bag detail page |
+| Gateway | Ticket Service | Internal function | Sidebar badge showing open ticket count |
+
+Each service also exposes its own health check endpoint (`/api/luggage/health`, `/api/tickets/health`) for independent service monitoring.
+
+### Serverless Event Pipeline
+
+When a support ticket is created, the Ticket Service publishes a structured event to AWS SNS, which fans out to an SQS queue. A Lambda function consumes the queue, classifies urgency based on keywords (lost, stolen, urgent, critical), and emits structured JSON analytics logs to CloudWatch for operational visibility. This decoupled architecture ensures the ticket creation flow is never blocked by downstream processing.
+
+```
+Ticket Service --> SNS Topic --> SQS Queue --> Lambda Function --> CloudWatch Logs
+```
+
+---
+
+## Fault Tolerance
+
+The system is designed to continue operating correctly even when individual components experience failures. Fault tolerance is achieved through redundancy, isolation, and automated recovery at every layer of the architecture.
 
 ### Multi-AZ Redundancy
 
-- **VPC**: Spans two Availability Zones (`us-east-1a` and `us-east-1b`) with 2 public and 2 private subnets
-- **Auto Scaling Group**: EC2 instances are distributed across both AZs (min=1, max=2)
-- **RDS**: Deployed with Multi-AZ enabled, providing a synchronous standby replica with automatic failover
+- **VPC**: Spans two Availability Zones (`us-east-1a` and `us-east-1b`) with 2 public and 2 private subnets, ensuring no single data center is a point of failure
+- **Auto Scaling Group**: EC2 instances are distributed across both AZs. If one AZ experiences an outage, the ASG maintains capacity in the surviving AZ
+- **RDS Multi-AZ**: The PostgreSQL database is deployed with Multi-AZ enabled, maintaining a synchronous standby replica in a separate AZ
+- **ALB**: The Application Load Balancer is deployed across both public subnets, automatically routing traffic only to healthy targets
 
-### Self-Healing
+### Network Isolation
 
-The ASG uses ELB-based health checks. If the ALB health check (`/health` endpoint) fails, the ASG automatically terminates the unhealthy instance and launches a replacement.
+Traffic flows through strictly segmented layers, each with its own security group:
 
-### Backup Strategy
+1. **Public Layer** (ALB, NAT Gateway): Accepts inbound HTTPS from the internet
+2. **Application Layer** (EC2 in private subnets): Accepts traffic only from the ALB security group
+3. **Data Layer** (RDS in private subnets): Accepts connections only from the Application security group on port 5432
 
-| Component | Backup Method | Retention |
-|-----------|---------------|-----------|
-| EC2 Instances | AWS Backup (daily, tag-based: `Backup=Daily`) | 30 days |
-| RDS Database | Automated snapshots (daily, 03:00-04:00 UTC window) | 7 days |
-| S3 Artifacts | Bucket versioning enabled | Indefinite |
+If any single layer is compromised, the blast radius is contained by security group boundaries.
+
+### Serverless Decoupling
+
+The SNS-SQS-Lambda pipeline decouples ticket event processing from the main application. If the Lambda function fails or the SQS queue backs up, the core application continues to function normally. SQS provides built-in message retention (up to 4 days by default), ensuring no events are lost during transient failures.
+
+---
+
+## Failover Mechanisms
+
+### Database Failover
+
+Amazon RDS Multi-AZ provides automatic failover for the PostgreSQL database:
+
+1. **Normal Operation**: All reads and writes go to the primary instance in one AZ
+2. **Failure Detection**: AWS continuously monitors the primary instance for hardware failures, network issues, or AZ-level outages
+3. **Automatic Failover**: If the primary fails, RDS automatically promotes the standby replica in the other AZ. The DNS endpoint remains the same, so the application reconnects transparently without configuration changes
+4. **Failover Time**: Typically completes within 60-120 seconds
+
+### Compute Failover
+
+The Auto Scaling Group handles compute-level failover:
+
+1. **Instance Failure**: If an EC2 instance crashes or becomes unresponsive, the ALB stops routing traffic to it based on health check failures
+2. **AZ Failure**: If an entire AZ goes down, the ASG launches replacement instances in the surviving AZ
+3. **Application Failure**: If the Flask application crashes (Gunicorn process dies), the systemd service automatically restarts it. If the restart fails, the ALB health check detects the failure and the ASG replaces the instance
+
+### Load Balancer Failover
+
+The ALB continuously monitors registered targets and only routes traffic to instances that pass health checks. Unhealthy targets are automatically removed from the rotation and re-added once they recover.
+
+---
+
+## Health Checks and Self-Healing
+
+### Health Check Chain
+
+The system implements a multi-layered health check strategy:
+
+| Layer | Health Check | Mechanism | Interval |
+|-------|-------------|-----------|----------|
+| **ALB to EC2** | `GET /health` returns HTTP 200 | ALB target group health check | Every 30 seconds |
+| **ASG to ALB** | ELB-based health check | ASG queries ALB target health status | Continuous |
+| **Luggage Service** | `GET /api/luggage/health` | Service-level health endpoint | On-demand |
+| **Ticket Service** | `GET /api/tickets/health` | Service-level health endpoint | On-demand |
+| **CloudWatch Alarm** | CPU utilization threshold (80%) | CloudWatch metric monitoring | Every 2 minutes |
+
+### Self-Healing Workflow
+
+When a failure is detected, the system automatically recovers without manual intervention:
+
+```
+1. Flask app crashes or EC2 instance fails
+       |
+2. ALB health check (/health) returns non-200 or times out
+       |
+3. ALB marks target as "unhealthy" (after 2 consecutive failures)
+       |
+4. ALB stops routing traffic to unhealthy target
+       |
+5. ASG detects unhealthy instance (health_check_type = "ELB")
+       |
+6. ASG terminates the unhealthy instance
+       |
+7. ASG launches a new instance from the Launch Template
+       |
+8. New instance runs user_data.sh (installs packages, pulls code from S3, starts services)
+       |
+9. ALB health check passes on new instance
+       |
+10. ALB adds new instance to rotation — traffic resumes
+```
+
+The entire self-healing cycle typically completes within 3-5 minutes.
+
+### Process-Level Recovery
+
+On each EC2 instance, Gunicorn runs as a systemd service with `Restart=always`. If the application process crashes, systemd restarts it immediately without triggering a full instance replacement.
+
+---
+
+## Data Backups and Replication
+
+### RDS Automated Backups
+
+| Setting | Value | Purpose |
+|---------|-------|---------|
+| Backup retention | 7 days | Point-in-time recovery for the past week |
+| Backup window | 03:00 - 04:00 UTC | Runs during lowest traffic period |
+| Multi-AZ replication | Synchronous | Real-time standby replica in a different AZ |
+| Storage encryption | KMS with auto-rotation | All backups are encrypted at rest |
+| Final snapshot on delete | Skipped (`skip_final_snapshot = true`) | Clean teardown for development environments |
+
+RDS automated backups enable point-in-time recovery (PITR) to any second within the 7-day retention window. If data corruption occurs, the database can be restored to the exact moment before the corruption happened.
+
+### EC2 Compute Backups (AWS Backup)
+
+| Setting | Value | Purpose |
+|---------|-------|---------|
+| Backup frequency | Daily at 05:00 UTC | Consistent daily snapshots |
+| Target selection | Tag-based (`Backup=Daily`) | Automatically includes all ASG instances |
+| Retention | 30 days | Full month of recovery points |
+| Vault | `luggage-system-backup-vault` | Centralized, isolated backup storage |
+
+AWS Backup creates daily EBS snapshots of all EC2 instances tagged with `Backup=Daily`. The ASG propagates this tag to every instance it launches, ensuring new instances are automatically enrolled in the backup plan.
+
+### S3 Artifact Versioning
+
+The application artifacts bucket (`luggage-app-artifacts`) has versioning enabled. Every update to `app.zip` creates a new version, allowing rollback to any previous deployment package. Accidental deletions can be recovered by restoring the previous version.
+
+### Replication Summary
+
+```
+                    ┌─────────────────────────────────────┐
+                    │        Data Protection Layers        │
+                    ├─────────────────────────────────────┤
+  RDS Database ───► │ Synchronous Multi-AZ Replication     │ Real-time
+                    │ Automated Daily Backups (7-day PITR) │ Daily
+                    ├─────────────────────────────────────┤
+  EC2 Instances ──► │ AWS Backup EBS Snapshots (30-day)    │ Daily
+                    │ ASG auto-replacement from S3 code    │ On failure
+                    ├─────────────────────────────────────┤
+  S3 Artifacts ───► │ Bucket Versioning (all versions)     │ On write
+                    │ force_destroy for clean teardown      │ On destroy
+                    └─────────────────────────────────────┘
+```
 
 ---
 
@@ -346,7 +530,7 @@ The architecture is designed to minimize costs while meeting production-grade re
 
 ## Screenshot Evidence
 
-All required evidence screenshots are compiled in the `Updated_screenshots.docx` file included in this submission. The evidence covers the following categories:
+All required evidence screenshots are compiled in the `Screenshots.docx` file included in this submission. The evidence covers the following categories:
 
 ### Infrastructure Evidence
 - Terraform plan and apply outputs
@@ -358,13 +542,13 @@ All required evidence screenshots are compiled in the `Updated_screenshots.docx`
 - Target group with healthy targets
 - Auto Scaling Group configuration and running instances
 
-### Encryption Evidence
+### Evidence of Encryption Settings
 - RDS storage encryption enabled with KMS key
 - EC2 EBS volume encryption enabled
 - HTTPS listener with TLS certificate
 
-### DDoS Protection Evidence
-- Amazon Shield Standard overview page
+### Evidence of DDoS Protection
+- Amazon Shield Standard overview page showing automatic protection for the ALB
 
 ### Secrets Management Evidence
 - AWS Secrets Manager secret (value not revealed)
@@ -376,7 +560,7 @@ All required evidence screenshots are compiled in the `Updated_screenshots.docx`
 - New luggage registration
 - Ticket center, ticket creation, and ticket resolution
 
-### Logging and Monitoring Evidence
+### Logging and Monitoring Screenshots
 - CloudWatch dashboard with CPU utilization metrics
 - CloudWatch alarm configuration
 - Application log groups and log stream entries
@@ -390,10 +574,42 @@ All required evidence screenshots are compiled in the `Updated_screenshots.docx`
 ### Auto Scaling Demonstration Evidence
 - Auto Scaling Group details (min/max/desired capacity)
 - Instance management showing running instances
+- ASG self-healing demonstration (instance termination and automatic replacement)
 
 ### Additional Evidence
 - AWS Backup plan and vault configuration
-- Cost Explorer (estimated deployment costs)
+
+---
+
+## Challenges Faced
+
+### 1. RDS Multi-AZ Provisioning Time
+
+Deploying a Multi-AZ RDS instance consistently took 12-20 minutes during `terraform apply`, which significantly slowed the development iteration cycle. To mitigate this, we used `skip_final_snapshot = true` to speed up teardown and added random suffixes to Secrets Manager and KMS alias names to prevent naming collisions during rapid destroy/re-apply cycles (AWS Secrets Manager soft-deletes secrets with a 7-day recovery window).
+
+### 2. Database Seeding Idempotency
+
+EC2 instances in an Auto Scaling Group can be terminated and replaced at any time. The user data script needed to be idempotent — it must seed the database on the very first instance launch but skip seeding on subsequent replacements to avoid duplicate data. We solved this by adding a check in `user_data.sh` that queries the `luggage_records` table count before deciding whether to run the seed script.
+
+### 3. Cross-Service Data Access in Microservices
+
+Decomposing the monolith into microservices required eliminating cross-domain database JOINs. The Ticket Service needed customer names from the Luggage Service, and the Analytics Service needed data from both. We introduced internal JSON API endpoints (`/api/luggage/batch`, `/api/tickets/stats`) to replace direct database queries across domain boundaries. One performance-critical JOIN in the recent tickets view was intentionally retained with a documented exception.
+
+### 4. ALB Access Log Propagation Delay
+
+ALB access logs are delivered to S3 on a best-effort basis with a typical delay of 5-10 minutes. During screenshot collection, we initially observed empty S3 buckets. The solution was to generate sufficient traffic by browsing the application, then wait at least 10 minutes before capturing the S3 evidence screenshots.
+
+### 5. Self-Signed Certificate Browser Warnings
+
+Using a self-signed TLS certificate triggers browser security warnings on every first visit. While a production deployment would use ACM with a validated domain, the self-signed approach was chosen to demonstrate encryption in transit without requiring Route 53 domain registration or DNS validation, keeping costs at zero.
+
+### 6. Security Group Dependency Ordering
+
+Security groups reference each other (the App SG references the ALB SG, the DB SG references the App SG). Terraform handles the dependency graph automatically, but during `terraform destroy`, security group deletion sometimes fails if ENIs are still attached. Using the ALB's `depends_on` for the S3 bucket policy and the ASG's `depends_on` for the Secrets Manager version ensured correct creation and destruction ordering.
+
+### 7. CloudWatch Agent Configuration
+
+Configuring the CloudWatch Agent on Amazon Linux 2023 required creating a JSON configuration file and starting the agent via a specific control script. The agent configuration had to be embedded directly in `user_data.sh` as a heredoc, since there is no external configuration management system in this deployment.
 
 ---
 
@@ -408,4 +624,4 @@ All required evidence screenshots are compiled in the `Updated_screenshots.docx`
 
 ---
 
-
+*ENPM818N — Cloud Computing and DevSecOps — Spring 2026*
